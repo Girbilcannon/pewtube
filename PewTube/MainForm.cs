@@ -14,7 +14,7 @@ internal sealed class MainForm : Form
     private readonly Downloader _downloader = new();
     private readonly TextBox _url = new();
     private readonly TextBox _folder = new();
-    private readonly ComboBox _quality = new(), _container = new();
+    private readonly ComboBox _type = new(), _format = new(), _quality = new();
     private readonly Button _analyze = new(), _download = new(), _cancel = new(), _browse = new();
     private readonly Label _media = new(), _status = new();
     private readonly TextBox _log = new();
@@ -33,7 +33,7 @@ internal sealed class MainForm : Form
         AutoScaleMode = AutoScaleMode.Dpi;
 
         var title = new Label { Text = "PewTube", Font = new Font("Segoe UI Semibold", 23, FontStyle.Bold), ForeColor = TextColor, AutoSize = true, Location = new Point(26, 18) };
-        var subtitle = new Label { Text = "Simple, high-quality video downloads", ForeColor = Muted, AutoSize = true, Location = new Point(29, 64) };
+        var subtitle = new Label { Text = "Simple, high-quality video and audio downloads", ForeColor = Muted, AutoSize = true, Location = new Point(29, 64) };
         Controls.Add(title); Controls.Add(subtitle);
 
         var card = new Panel { BackColor = PanelBg, Location = new Point(24, 103), Size = new Size(752, 315), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
@@ -52,11 +52,18 @@ internal sealed class MainForm : Form
         _media.Size = new Size(713, 40);
         _media.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         card.Controls.Add(_media);
-        AddLabel(card, "QUALITY", 18, 135);
-        AddLabel(card, "CONTAINER", 386, 135);
-        StyleCombo(_quality, new[] { "Best available", "2160p", "1440p", "1080p", "720p" }, 18, 160, 341);
-        StyleCombo(_container, new[] { "Auto", "MKV", "MP4", "WebM" }, 386, 160, 346);
-        card.Controls.Add(_quality); card.Controls.Add(_container);
+        // Dependency chain: TYPE -> FORMAT -> QUALITY. The catalog owns all options.
+        AddLabel(card, "TYPE", 18, 135);
+        AddLabel(card, "FORMAT", 260, 135);
+        AddLabel(card, "QUALITY", 501, 135);
+        StyleCombo(_type, ["Video with Audio", "Audio Only"], 18, 160, 225);
+        StyleCombo(_format, DownloadCatalog.VideoFormats, 260, 160, 225);
+        StyleCombo(_quality, DownloadCatalog.VideoQualities, 501, 160, 231);
+        card.Controls.Add(_type);
+        card.Controls.Add(_format);
+        card.Controls.Add(_quality);
+        _type.SelectedIndexChanged += (_, _) => UpdateFormats();
+        _format.SelectedIndexChanged += (_, _) => UpdateQualities();
         AddLabel(card, "SAVE TO", 18, 205);
         StyleBox(_folder, 18, 232, 596, null);
         _folder.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
@@ -97,6 +104,26 @@ internal sealed class MainForm : Form
         _analyze.Click += async (_, _) => await Analyze();
         _download.Click += async (_, _) => await Download();
         _cancel.Click += (_, _) => _cts?.Cancel();
+    }
+
+    private MediaType SelectedType => _type.SelectedIndex == 1 ? MediaType.AudioOnly : MediaType.VideoWithAudio;
+
+    private void UpdateFormats()
+    {
+        string[] formats = DownloadCatalog.FormatsFor(SelectedType);
+        _format.Items.Clear();
+        _format.Items.AddRange(formats);
+        _format.SelectedIndex = 0;
+        _download.Text = SelectedType == MediaType.AudioOnly ? "Download Audio" : "Download Video";
+        UpdateQualities();
+    }
+
+    private void UpdateQualities()
+    {
+        string[] qualities = DownloadCatalog.QualitiesFor(SelectedType, _format.Text);
+        _quality.Items.Clear();
+        _quality.Items.AddRange(qualities);
+        _quality.SelectedIndex = 0;
     }
 
     private string ToolStatus() => !_downloader.HasYtDlp ? "Missing Tools\\yt-dlp.exe — see README" : !_downloader.HasFfmpeg ? "Missing Tools\\ffmpeg.exe — see README" : "Ready";
@@ -142,6 +169,7 @@ internal sealed class MainForm : Form
     private void Busy(bool state)
     {
         _analyze.Enabled = !state; _download.Enabled = !state; _cancel.Enabled = state;
+        _type.Enabled = !state; _format.Enabled = !state; _quality.Enabled = !state;
     }
     private async Task Analyze()
     {
@@ -168,7 +196,8 @@ internal sealed class MainForm : Form
         _cts = cts; Busy(true); _progress.Value = 0; _status.Text = "Downloading...";
         try
         {
-            await _downloader.DownloadAsync(url, _folder.Text, _quality.Text, _container.Text, Log, SetProgress, cts.Token);
+            var options = new DownloadOptions(SelectedType, _format.Text, _quality.Text);
+            await _downloader.DownloadAsync(url, _folder.Text, options, Log, SetProgress, cts.Token);
             _status.Text = "Download complete.";
             Log("Download complete.");
         }

@@ -7,5 +7,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>PewTube</AssemblyName>
     <RootNamespace>PewTube</RootNamespace>
+    <ApplicationTitle>PewTube</ApplicationTitle>
+  </PropertyGroup>
+  <!-- Release publishing bundles the .NET runtime, DLL, and runtimeconfig into one EXE.
+       Debug builds intentionally remain multi-file for efficient development. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
 </Project>
